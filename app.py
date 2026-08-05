@@ -212,15 +212,27 @@ if answer is not None:
 render_chat_history()
 
 st.markdown('<div class="bottom-bar">', unsafe_allow_html=True)
+
 left, middle, right = st.columns([1, 8, 1])
+
 with left:
     if st.button("➕", use_container_width=True):
         st.session_state.show_uploader = not st.session_state.show_uploader
+
 with middle:
+    if st.session_state.get("uploaded_docs"):
+        chips = "".join(
+            f"<span style='background:#1f2937;color:#e5e7eb;padding:6px 12px;border-radius:16px;margin-right:8px;font-size:13px;'>📄 {name}</span>"
+            for name in st.session_state.uploaded_docs
+        )
+        st.markdown(chips, unsafe_allow_html=True)
+
     prompt = st.chat_input("Message Personal AI v3 Pro")
+
 with right:
     if st.button("🎤", use_container_width=True):
         st.session_state.voice_input = listen_to_voice()
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.voice_input:
@@ -248,38 +260,30 @@ if st.session_state.show_uploader:
         accept_multiple_files=True,
     )
 
+    if "uploaded_docs" not in st.session_state:
+        st.session_state.uploaded_docs = []
+
     if uploaded_files:
-
         for uploaded_file in uploaded_files:
-
-            st.success(f"Uploaded: {uploaded_file.name}")
-
             try:
-
                 text = extract_text(uploaded_file)
 
                 if text.strip():
-
                     add_document(
                         text,
                         uploaded_file.name
                     )
 
-                    st.success(
-                        f"{uploaded_file.name} indexed successfully."
-                    )
+                    # Keep track of uploaded files internally
+                    if uploaded_file.name not in st.session_state.uploaded_docs:
+                        st.session_state.uploaded_docs.append(uploaded_file.name)
 
-                else:
+                # If no text is found, do nothing (silent fail)
 
-                    st.warning(
-                        f"No readable text found in {uploaded_file.name}"
-                    )
-
-            except Exception as e:
-
-                st.error(
-                    f"Error processing {uploaded_file.name}\n\n{e}"
-                )
+            except Exception:
+                # Silently ignore processing errors for a cleaner UI
+                pass
+        st.session_state.show_uploader = False
 
 if prompt:
     memory_text = extract_memory_text(prompt)
@@ -289,6 +293,7 @@ if prompt:
         st.session_state.messages.append({"role": "assistant", "content": ack})
         if st.session_state.conversation_id is None:
             st.session_state.conversation_id = create_conversation("Memory Chat")
+            st.session_state.conversation_title = "Memory Chat"
         save_message(st.session_state.conversation_id, "assistant", ack)
         st.session_state.voice_input = None
     else:
@@ -308,6 +313,11 @@ if prompt:
             f"- {m[1]}" for m in get_memories()
         )
 
+        document_results = search_documents(prompt)
+        document_context = "\n\n".join(
+            (result.get("text") if isinstance(result, dict) else result) for result in document_results
+        )
+
         web_context = ""
         if st.session_state.web_search_enabled:
             results = search_web(prompt, max_results=3)
@@ -325,8 +335,24 @@ if prompt:
                 web_context = "\n".join(formatted_results)
 
         messages_for_ai = [
-            {"role": "system", "content": get_mode_instruction(st.session_state.assistant_mode)}
+            {
+                "role": "system",
+                "content": get_mode_instruction(st.session_state.assistant_mode),
+            }
         ]
+
+        if document_context:
+            messages_for_ai.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "The user has uploaded documents. Use the following document excerpts "
+                        "to answer the question. If the answer is found in the documents, answer "
+                        "confidently from them.\n\n"
+                        + document_context
+                    ),
+                }
+            )
 
         if memory_context:
             messages_for_ai.append({"role": "system", "content": "User memories:\n" + memory_context})
@@ -346,7 +372,6 @@ if prompt:
                 st.session_state.provider
             ):
                 response += chunk
-
                 placeholder.markdown(
                     f"<div class='chat-ai'>{response}▌</div>",
                     unsafe_allow_html=True
@@ -371,5 +396,4 @@ if prompt:
         )
 
         speak_text(response)
-
         st.session_state.voice_input = None

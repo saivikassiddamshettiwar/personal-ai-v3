@@ -1,9 +1,12 @@
 import os
-import tempfile
 import pandas as pd
 import fitz  # PyMuPDF
-from pypdf import PdfReader
+import pytesseract
+from PIL import Image
 from docx import Document
+
+# Path to Tesseract OCR
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def extract_text(uploaded_file):
@@ -20,107 +23,80 @@ def extract_text(uploaded_file):
         )
 
     # =====================================================
-    # PDF (PyMuPDF first, pypdf fallback)
+    # PDF (PyMuPDF + OCR fallback)
     # =====================================================
     elif file_extension == ".pdf":
-        temporary_path = None
 
-        try:
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".pdf"
-            ) as temporary_file:
+        pdf_bytes = uploaded_file.getvalue()
 
-                temporary_file.write(uploaded_file.getbuffer())
-                temporary_path = temporary_file.name
+        document = fitz.open(
+            stream=pdf_bytes,
+            filetype="pdf"
+        )
 
-            # -----------------------------
-            # Try PyMuPDF first
-            # -----------------------------
-            try:
-                document = fitz.open(temporary_path)
-                text = ""
+        text = ""
 
-                for page in document:
-                    text += page.get_text() + "\n"
+        for page in document:
 
-                document.close()
+            page_text = page.get_text().strip()
 
-                if text.strip():
-                    return text
+            if page_text:
+                text += page_text + "\n"
 
-            except Exception:
-                pass
+            else:
+                pix = page.get_pixmap(
+                    matrix=fitz.Matrix(2, 2)
+                )
 
-            # -----------------------------
-            # Fallback to pypdf
-            # -----------------------------
-            text = ""
-            reader = PdfReader(temporary_path)
+                image = Image.frombytes(
+                    "RGB",
+                    [pix.width, pix.height],
+                    pix.samples
+                )
 
-            for page in reader.pages:
-                page_text = page.extract_text()
+                ocr_text = pytesseract.image_to_string(image)
 
-                if page_text:
-                    text += page_text + "\n"
+                text += ocr_text + "\n"
 
-            return text
+        document.close()
 
-        finally:
-            if (
-                temporary_path
-                and os.path.exists(temporary_path)
-            ):
-                os.remove(temporary_path)
+        return text
 
     # =====================================================
     # DOCX
     # =====================================================
     elif file_extension == ".docx":
-        temporary_path = None
 
-        try:
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".docx"
-            ) as temporary_file:
+        document = Document(uploaded_file)
 
-                temporary_file.write(uploaded_file.getbuffer())
-                temporary_path = temporary_file.name
+        text = "\n".join(
+            paragraph.text
+            for paragraph in document.paragraphs
+            if paragraph.text.strip()
+        )
 
-            document = Document(temporary_path)
-
-            text = "\n".join(
-                paragraph.text
-                for paragraph in document.paragraphs
-                if paragraph.text.strip()
-            )
-
-            return text
-
-        finally:
-            if (
-                temporary_path
-                and os.path.exists(temporary_path)
-            ):
-                os.remove(temporary_path)
+        return text
 
     # =====================================================
     # CSV
     # =====================================================
     elif file_extension == ".csv":
+
         dataframe = pd.read_csv(uploaded_file)
+
         return dataframe.to_string(index=False)
 
     # =====================================================
     # EXCEL
     # =====================================================
     elif file_extension in [".xlsx", ".xls"]:
+
         excel_file = pd.ExcelFile(uploaded_file)
 
         text = ""
 
         for sheet_name in excel_file.sheet_names:
+
             dataframe = pd.read_excel(
                 excel_file,
                 sheet_name=sheet_name
@@ -135,33 +111,16 @@ def extract_text(uploaded_file):
         return text
 
     # =====================================================
-    # JSON
+    # JSON / XML / RTF
     # =====================================================
-    elif file_extension == ".json":
+    elif file_extension in [".json", ".xml", ".rtf"]:
+
         return uploaded_file.getvalue().decode(
             "utf-8",
             errors="ignore"
         )
 
     # =====================================================
-    # XML
-    # =====================================================
-    elif file_extension == ".xml":
-        return uploaded_file.getvalue().decode(
-            "utf-8",
-            errors="ignore"
-        )
-
-    # =====================================================
-    # RTF
-    # =====================================================
-    elif file_extension == ".rtf":
-        return uploaded_file.getvalue().decode(
-            "utf-8",
-            errors="ignore"
-        )
-
-    # =====================================================
-    # Unsupported file type
+    # Unsupported
     # =====================================================
     return ""
