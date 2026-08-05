@@ -178,59 +178,43 @@ def generate_response(messages, model, provider="Ollama"):
 # Image Analysis
 # ==========================================
 
-def analyze_image(image_path, question, model="llava"):
+def analyze_image(image_path, question, model="llava:latest"):
 
     image = Image.open(image_path)
 
     if image.mode != "RGB":
         image = image.convert("RGB")
 
-    image.thumbnail((1024, 1024))
+    # Smaller image = faster inference
+    image.thumbnail((384, 384))
 
     temp_path = None
 
     try:
-
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".jpg"
-        ) as temp:
-
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp:
             temp_path = temp.name
 
-        image.save(
-            temp_path,
-            "JPEG",
-            quality=80
-        )
+        image.save(temp_path, "JPEG", quality=75)
 
         response = ollama.chat(
-
             model=model,
-
             messages=[
-
                 {
                     "role": "user",
                     "content": question,
-                    "images": [temp_path]
+                    "images": [temp_path],
                 }
-
-            ]
-
+            ],
         )
 
         return response["message"]["content"]
 
     except Exception as e:
-
         return f"Image Analysis Error:\n\n{e}"
 
     finally:
-
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
-
 
 # ==========================================
 # Assistant Modes

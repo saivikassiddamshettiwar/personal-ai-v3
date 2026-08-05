@@ -119,6 +119,8 @@ conversation_labels = ["New Chat"] + [f"{title} ({created_at[:10]})" for _, titl
 conversation_ids = [None] + [conversation_id for conversation_id, _, _ in conversations]
 conversation_titles = ["Current Chat"] + [title for _, title, _ in conversations]
 
+answer = None
+
 with st.sidebar:
     st.title("🤖 Personal AI v3 Pro")
 
@@ -149,9 +151,8 @@ with st.sidebar:
         )
 
         if st.button("Analyze Image"):
-            with st.spinner("Analyzing image..."):
+            with st.spinner("LLaVA is analyzing the image locally... This may take 20-60 seconds on CPU."):
                 answer = analyze_image("temp_image.png", image_question)
-            st.write(answer)
 
     if selected_index != st.session_state.selected_conversation_index:
         st.session_state.selected_conversation_index = selected_index
@@ -204,6 +205,9 @@ with st.sidebar:
 
     st.caption(f"Current Provider: {st.session_state.provider}")
     st.caption(f"Current Model: {st.session_state.selected_model}")
+
+if answer is not None:
+    st.write(answer)
 
 render_chat_history()
 
