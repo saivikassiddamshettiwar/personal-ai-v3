@@ -1,0 +1,59 @@
+:root {
+  --bg: #050816;
+  --sidebar: #0B1020;
+  --card: #121827;
+  --card-2: #161D2F;
+  --border: #2A3448;
+  --text: #F5F7FB;
+  --muted: #9CA7C2;
+  --accent: #4F8CFF;
+  --accent-2: #6AA3FF;
+}
+
+html, body, [data-testid="stAppViewContainer"] {
+  background: radial-gradient(circle at top, #0B1020 0%, #050816 55%, #03060F 100%);
+  color: var(--text);
+}
+
+[data-testid="stSidebar"] {
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.block-container {
+  max-width: 1000px;
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+.chat-user {
+  background: var(--accent);
+  color: white;
+  border-radius: 20px;
+  padding: 14px 18px;
+}
+
+.chat-ai {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 14px 18px;
+}
+
+.input-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 12px;
+}
+
+.title-gradient {
+  background: linear-gradient(90deg, #FFFFFF, #9CC2FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.small-muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
