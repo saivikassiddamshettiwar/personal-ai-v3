@@ -1,198 +1,218 @@
-# 🤖 Personal AI V3
+# Personal AI v3.1
 
-Personal AI V3 is an AI-powered chatbot built with **Python**, **Streamlit**, and **Ollama**. It provides a clean and interactive chat interface where users can communicate with locally running Large Language Models (LLMs) such as **Llama 3.2** without requiring any paid API keys.
+A local-first AI assistant built with **Python, Streamlit, Ollama, Llama 3.2, LLaVA, ChromaDB, SQLite, and OCR**.
+The project runs entirely on your own machine without requiring OpenAI or other cloud AI APIs for its core functionality.
 
----
+## Features
 
-## 🚀 Features
+### AI Chat
 
-* 💬 Interactive chat interface
-* 🧠 Local AI inference using Ollama
-* ⚡ Fast response streaming
-* 🎨 User-friendly Streamlit UI
-* 🔒 Privacy-focused (runs locally)
-* 🖥️ Simple and lightweight setup
-* 🔄 Chat history support
-* 🆓 No OpenAI API key required
+* Local AI chat powered by **Ollama**
+* Supports **Llama 3.2**
+* Streaming responses with a typing effect
+* Multiple assistant modes:
 
----
+  * General Chat
+  * Coding Assistant
+  * Debugging
+  * Explain Code
 
-## 🛠️ Tech Stack
+### Document Chat (RAG)
 
-* **Python 3.10+**
+* Chat with uploaded documents using **ChromaDB**
+* Supports:
+
+  * PDF
+  * DOCX
+  * TXT
+  * CSV
+  * XLSX / XLS
+  * JSON
+  * XML
+* Automatic document chunking and embedding generation
+* Semantic retrieval for question answering
+
+### OCR Support
+
+* Extracts text from scanned PDFs and image-based documents
+* Uses **PyMuPDF** and **Tesseract OCR**
+
+### Image Understanding
+
+* Local image analysis using **LLaVA**
+* Ask questions about uploaded images
+* No cloud vision API required
+
+### Voice Features
+
+* Voice input (speech-to-text)
+* Voice output (text-to-speech)
+
+### Web Search
+
+* Optional web search integration
+* Can combine retrieved web information with local AI responses
+
+### Personal Memory
+
+* Store user memories
+* Retrieve remembered information across conversations
+
+### Conversation Management
+
+* Persistent chat history stored in **SQLite**
+* ChatGPT-style conversation sidebar
+* **New Chat**
+* **Delete individual conversations**
+* **Clear all conversations**
+* Automatic conversation title generation
+
+### Premium UI
+
+* Modern dark theme
+* ChatGPT-inspired layout
+* Collapsible settings panel
+* Compact attachment drawer
+* Rounded attachment chips
+* Clean sidebar branding
+* Empty-state welcome screen
+
+## Tech Stack
+
+* **Python**
 * **Streamlit**
 * **Ollama**
 * **Llama 3.2**
-* **Git & GitHub**
+* **LLaVA**
+* **ChromaDB**
+* **SQLite**
+* **PyMuPDF**
+* **Tesseract OCR**
+* **Pillow**
+* **pandas**
+* **python-docx**
 
----
+## Project Structure
 
-## 📂 Project Structure
-
-```text
-personal-ai-v3/
-│── app.py                 # Streamlit application
-│── chatbot.py             # AI response generation
-│── requirements.txt       # Python dependencies
-│── README.md              # Project documentation
-│── assets/                # Images (optional)
-└── venv/                  # Virtual environment (not uploaded)
+```
+Personal-AI/
+│
+├── app.py                 # Main Streamlit application
+├── chatbot.py             # AI chat and image analysis
+├── database.py            # Conversation database
+├── memory.py              # Personal memory storage
+├── rag.py                 # ChromaDB retrieval system
+├── document_loader.py     # Document extraction and OCR
+├── web_search.py          # Web search integration
+├── voice.py               # Speech input/output
+├── models.py              # Provider and model management
+├── config.py              # Configuration
+├── requirements.txt
+└── chroma_db/             # ChromaDB storage
 ```
 
----
+## Installation
 
-## 📥 Installation
-
-### 1. Clone the Repository
+### Clone the repository
 
 ```bash
 git clone https://github.com/saivikassiddamshettiwar/personal-ai-v3.git
-```
-
-```bash
 cd personal-ai-v3
 ```
 
----
+### Create a virtual environment
 
-### 2. Create a Virtual Environment
+```bash
+python -m venv .venv
+```
+
+Activate it:
 
 **Windows**
 
 ```bash
-python -m venv venv
-venv\Scripts\activate
+.venv\\Scripts\\activate
 ```
 
-**Linux / macOS**
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-### 3. Install Dependencies
+### Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### Install Ollama
 
-### 4. Install Ollama
-
-Download and install Ollama from:
+Download Ollama from:
 
 https://ollama.com
 
----
-
-### 5. Download the Llama Model
+Pull the required models:
 
 ```bash
 ollama pull llama3.2:3b
+ollama pull llava:latest
+ollama pull nomic-embed-text
 ```
 
----
-
-### 6. Start Ollama
-
-```bash
-ollama serve
-```
-
----
-
-### 7. Run the Application
+### Run the application
 
 ```bash
 streamlit run app.py
 ```
 
-The application will open automatically in your browser.
+## How It Works
 
----
+### Document Workflow
 
-## 💻 Usage
+1. Upload a PDF, DOCX, TXT, CSV, or other supported document.
+2. The text is extracted.
+3. The document is split into semantic chunks.
+4. Chunks are embedded using **nomic-embed-text**.
+5. Embeddings are stored in **ChromaDB**.
+6. User questions retrieve the most relevant chunks.
+7. Llama 3.2 answers using the retrieved context.
 
-1. Launch the Streamlit application.
-2. Select the desired AI model.
-3. Enter your prompt in the chat box.
-4. Receive AI-generated responses in real time.
+### Image Workflow
 
----
+1. Upload an image.
+2. LLaVA processes the image locally.
+3. The assistant answers questions about the image.
 
-## 📸 Screenshot
+## Current Capabilities
 
-<img width="1920" height="931" alt="image" src="https://github.com/user-attachments/assets/6ee2ded0-3e6a-4fbc-a004-3025ce2ff88a" />
+* Local AI chat
+* Document question answering
+* OCR for scanned certificates
+* Image understanding
+* Voice interaction
+* Web search
+* Personal memory
+* Chat history
+* Premium sidebar and UI
+* Automatic conversation titles
 
+## Future Improvements
 
+* Conversation search
+* Export chats to PDF / Markdown
+* Integrated image uploads through the chat composer
+* Drag-and-drop attachments
+* Faster retrieval and indexing
+* Cloud deployment branch using Gemini
+* Mobile-responsive layout
 
+## License
 
-```
-assets/screenshot.png
-```
+This project is intended for educational and portfolio purposes.
 
-Example:
-
-```markdown
-![Personal AI V3](assets/screenshot.png)
-```
-
----
-
-## 📋 Requirements
-
-* Python 3.10 or higher
-* Ollama
-* Streamlit
-* Internet connection (only for downloading the model the first time)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork the repository.
-2. Create a feature branch.
-
-```bash
-git checkout -b feature-name
-```
-
-3. Commit your changes.
-
-```bash
-git commit -m "Added new feature"
-```
-
-4. Push your branch.
-
-```bash
-git push origin feature-name
-```
-
-5. Open a Pull Request.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## 👨‍💻 Author
+## Author
 
 **Saivikas Siddamshettiwar**
+
+Integrated M.Tech in Software Engineering
 
 GitHub: https://github.com/saivikassiddamshettiwar
 
 ---
 
-## ⭐ Support
-
-If you found this project helpful, please consider giving it a ⭐ on GitHub.
+Personal AI v3.1 is designed as a **local-first multimodal AI assistant** that combines LLM chat, document retrieval, OCR, image understanding, memory, voice interaction, and a modern AI application interface into a single offline-capable system.
