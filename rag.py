@@ -109,45 +109,30 @@ def add_document(
         )
 
 
-def search_documents(
-
-    query,
-
-    number_of_results=5
-
-):
+def search_documents(query, number_of_results=3):
 
     if collection.count() == 0:
-
         return []
 
-    query_embedding = create_embedding(
-        query
-    )
+    query_embedding = create_embedding(query)
 
     total_documents = collection.count()
-
-    number_of_results = min(
-
-        number_of_results,
-
-        total_documents
-
-    )
+    number_of_results = min(number_of_results, total_documents)
 
     results = collection.query(
-
-        query_embeddings=[
-            query_embedding
-        ],
-
+        query_embeddings=[query_embedding],
         n_results=number_of_results
-
     )
 
-    documents = results.get(
-        "documents",
-        [[]]
-    )[0]
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
 
-    return documents
+    output = []
+
+    for document, metadata in zip(documents, metadatas):
+        output.append({
+            "text": document,
+            "source": metadata.get("file_name", "Unknown document")
+        })
+
+    return output

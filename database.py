@@ -241,3 +241,32 @@ def delete_conversation(
     connection.commit()
 
     connection.close()
+
+
+def delete_all_conversations():
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute("DELETE FROM messages")
+    cursor.execute("DELETE FROM conversations")
+
+    connection.commit()
+
+    connection.close()
+
+
+def update_conversation_title(conversation_id, title):
+    import sqlite3
+
+    conn = sqlite3.connect("chat_history.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE conversations SET title = ? WHERE id = ?",
+        (title, conversation_id)
+    )
+
+    conn.commit()
+    conn.close()

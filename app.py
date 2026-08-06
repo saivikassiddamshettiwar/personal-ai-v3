@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import datetime, date, timedelta
 from chatbot import (
     generate_response as stream_chat,
     get_mode_instruction,
@@ -11,6 +12,8 @@ from database import (
     get_conversations,
     get_messages,
     delete_conversation,
+    delete_all_conversations,
+    update_conversation_title,
 )
 from memory import (
     init_memory_database,
@@ -29,6 +32,107 @@ from models import (
 )
 
 st.set_page_config(page_title="Personal AI v3 Pro", page_icon="🤖", layout="wide")
+
+# ---------- Modern UI Theme ----------
+st.markdown(
+""" <style>
+.stApp {
+background: linear-gradient(180deg, #0b0f17 0%, #0a0d14 100%);
+color: #e5e7eb;
+}
+
+section[data-testid="stSidebar"] {
+    background: #0f172a;
+    border-right: 1px solid #1f2937;
+}
+
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    max-width: 1100px;
+}
+
+h1, h2, h3 {
+    color: #f9fafb;
+    letter-spacing: -0.02em;
+}
+
+.chat-user {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    padding: 14px 18px;
+    border-radius: 18px;
+    margin: 10px 0;
+    max-width: 82%;
+    margin-left: auto;
+    box-shadow: 0 8px 24px rgba(37,99,235,0.18);
+}
+
+.chat-ai {
+    background: #111827;
+    color: #f9fafb;
+    padding: 14px 18px;
+    border-radius: 18px;
+    margin: 10px 0;
+    max-width: 82%;
+    border: 1px solid #374151;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.bottom-bar {
+    position: sticky;
+    bottom: 0;
+    background: rgba(11, 15, 23, 0.92);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid #1f2937;
+    padding: 10px 0 8px 0;
+    z-index: 999;
+}
+
+.stChatInputContainer {
+    border-radius: 18px !important;
+    border: 1px solid #374151 !important;
+    background: #111827 !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+}
+
+.stButton button {
+    border-radius: 14px !important;
+    background: #111827 !important;
+    color: #f9fafb !important;
+    border: 1px solid #374151 !important;
+    transition: all 0.2s ease;
+}
+
+.stButton button:hover {
+    background: #1f2937 !important;
+    border-color: #4b5563 !important;
+    transform: translateY(-1px);
+}
+
+div[data-testid="stFileUploader"] {
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 16px;
+    padding: 12px;
+}
+
+.stSelectbox > div > div {
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 12px;
+}
+
+.stTextInput > div > div > input {
+    background: #111827;
+    color: #f9fafb;
+    border-radius: 12px;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 init_database()
 init_memory_database()
@@ -101,107 +205,199 @@ def extract_memory_text(prompt):
 
     return None
 
+
+def generate_chat_title(user_prompt, assistant_reply):
+    title_prompt = (
+        "Generate a short conversation title (3-5 words) based on this chat. "
+        "Return ONLY the title and nothing else.\n\n"
+        f"User: {user_prompt}\n"
+        f"Assistant: {assistant_reply}"
+    )
+
+    title = ""
+
+    for chunk in stream_chat(
+        [{"role": "user", "content": title_prompt}],
+        st.session_state.selected_model,
+        st.session_state.provider,
+    ):
+        title += chunk
+
+    return title.strip().replace("\n", " ")[:40]
+
+
+def format_conversation_group(created_at):
+    try:
+        created_dt = datetime.fromisoformat(created_at)
+    except Exception:
+        try:
+            created_dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return created_at
+
+    created_date = created_dt.date()
+    today = date.today()
+    if created_date == today:
+        return "Today"
+    if created_date == today - timedelta(days=1):
+        return "Yesterday"
+    return created_dt.strftime("%b %d, %Y")
+
+
+def group_conversations_by_date(conversations):
+    groups = {}
+    order = []
+    for conversation_id, title, created_at in conversations:
+        group_label = format_conversation_group(created_at)
+        if group_label not in groups:
+            groups[group_label] = []
+            order.append(group_label)
+        groups[group_label].append((conversation_id, title, created_at))
+    return [(label, groups[label]) for label in order]
+
+
 def render_chat_history():
-    st.markdown("### Chat History")
     if st.session_state.messages:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
     else:
-        st.info("No messages yet. Start a new chat or type a prompt below.")
+        st.markdown(
+            """
+            <div style="text-align:center;padding:90px 20px 40px 20px;">
+                <div style="font-size:44px;font-weight:700;color:#f9fafb;">
+                    Personal AI
+                </div>
+                <div style="color:#9ca3af;font-size:18px;margin-top:12px;">
+                </div>
+                <div style="color:#6b7280;font-size:15px;margin-top:22px;">
+                    Ask questions, analyze images, chat with PDFs, search the web, or write code.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 conversations = get_conversations()
-conversation_labels = ["New Chat"] + [f"{title} ({created_at[:10]})" for _, title, created_at in conversations]
-conversation_ids = [None] + [conversation_id for conversation_id, _, _ in conversations]
-conversation_titles = ["Current Chat"] + [title for _, title, _ in conversations]
 
 answer = None
 
 with st.sidebar:
-    st.title("🤖 Personal AI v3 Pro")
-
-    selected_index = st.selectbox(
-        "Saved conversations",
-        range(len(conversation_labels)),
-        format_func=lambda idx: conversation_labels[idx],
-        index=st.session_state.selected_conversation_index,
+    st.markdown(
+        """
+    <div style="padding:8px 0 16px 0;">
+        <div style="font-size:24px;font-weight:700;color:#f9fafb;">
+            Personal AI
+        </div>
+        <div style="color:#9ca3af;font-size:13px;margin-top:4px;">
+            Local AI assistant • Ollama
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
     )
 
-    st.divider()
+    st.markdown("### Chats")
 
-    st.subheader("Image Understanding")
+    if st.button("+ New chat", use_container_width=True):
+        load_conversation(None, "New Chat")
+        st.session_state.uploaded_docs = []
+        st.session_state.document_texts = {}
+        st.session_state.show_uploader = False
+        st.rerun()
 
-    uploaded_image = st.file_uploader(
-        "Upload an image",
-        type=["png", "jpg", "jpeg", "webp"],
-        key="image_uploader"
+    st.markdown("---")
+
+    for conversation_id, title, created_at in conversations:
+
+        left, right = st.columns([6, 1])
+
+        with left:
+            if st.button(
+                f"💬 {title}",
+                key=f"open_{conversation_id}",
+                use_container_width=True,
+            ):
+                load_conversation(conversation_id, title)
+                st.rerun()
+
+        with right:
+            if st.button(
+                "🗑️",
+                key=f"delete_{conversation_id}",
+                use_container_width=True,
+            ):
+                delete_conversation(conversation_id)
+
+                if st.session_state.conversation_id == conversation_id:
+                    load_conversation(None, "New Chat")
+                    st.session_state.uploaded_docs = []
+                    st.session_state.document_texts = {}
+
+                st.rerun()
+
+    st.markdown("---")
+
+    if st.button("🗑️ Clear all conversations", use_container_width=True):
+        delete_all_conversations()
+
+        load_conversation(None, "New Chat")
+        st.session_state.uploaded_docs = []
+        st.session_state.document_texts = {}
+        st.session_state.show_uploader = False
+
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown(
+        f"""
+    <div style="background:#111827;border:1px solid #374151;
+                border-radius:16px;padding:14px 16px;">
+        <div style="color:#9ca3af;font-size:12px;">Current chat</div>
+        <div style="color:#f9fafb;font-weight:600;margin-top:6px;">
+            {st.session_state.conversation_title}
+        </div>
+        <div style="color:#9ca3af;font-size:12px;margin-top:6px;">
+            {len(st.session_state.messages)} messages
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
     )
 
-    if uploaded_image is not None:
-        with open("temp_image.png", "wb") as f:
-            f.write(uploaded_image.getbuffer())
-
-        image_question = st.text_input(
-            "Ask about the image",
-            "What is in this image?"
+    st.markdown("---")
+    with st.expander("Settings", expanded=False):
+        st.session_state.assistant_mode = st.selectbox(
+            "Assistant Mode",
+            ["General Chat", "Coding Assistant", "Debugging", "Explain Code"],
+            index=["General Chat", "Coding Assistant", "Debugging", "Explain Code"].index(st.session_state.assistant_mode),
+        )
+        st.session_state.web_search_enabled = st.checkbox(
+            "Enable Web Search",
+            value=st.session_state.web_search_enabled,
+        )
+        # AI Provider
+        st.session_state.provider = st.selectbox(
+            "AI Provider",
+            get_available_providers()
         )
 
-        if st.button("Analyze Image"):
-            with st.spinner("LLaVA is analyzing the image locally... This may take 20-60 seconds on CPU."):
-                answer = analyze_image("temp_image.png", image_question)
+        # Models
+        available_models = get_models(
+            st.session_state.provider
+        )
 
-    if selected_index != st.session_state.selected_conversation_index:
-        st.session_state.selected_conversation_index = selected_index
-        selected_id = conversation_ids[selected_index]
-        selected_title = conversation_titles[selected_index]
-        load_conversation(selected_id, selected_title)
+        if st.session_state.selected_model not in available_models:
+            st.session_state.selected_model = available_models[0]
 
-    if st.button("New chat", use_container_width=True):
-        load_conversation(None, "New Chat")
+        st.session_state.selected_model = st.selectbox(
+            "Model",
+            available_models
+        )
 
-    if st.button("Clear conversation", use_container_width=True):
-        if st.session_state.conversation_id is not None:
-            delete_conversation(st.session_state.conversation_id)
-        load_conversation(None, "New Chat")
-
-    st.markdown("---")
-    st.subheader("Conversation")
-    st.write(f"**{st.session_state.conversation_title}**")
-    st.write(f"Messages: {len(st.session_state.messages)}")
-
-    st.markdown("---")
-    st.subheader("Settings")
-    st.session_state.assistant_mode = st.selectbox(
-        "Assistant Mode",
-        ["General Chat", "Coding Assistant", "Debugging", "Explain Code"],
-        index=["General Chat", "Coding Assistant", "Debugging", "Explain Code"].index(st.session_state.assistant_mode),
-    )
-    st.session_state.web_search_enabled = st.checkbox(
-        "Enable Web Search",
-        value=st.session_state.web_search_enabled,
-    )
-    # AI Provider
-    st.session_state.provider = st.selectbox(
-        "AI Provider",
-        get_available_providers()
-    )
-
-    # Models
-    available_models = get_models(
-        st.session_state.provider
-    )
-
-    if st.session_state.selected_model not in available_models:
-        st.session_state.selected_model = available_models[0]
-
-    st.session_state.selected_model = st.selectbox(
-        "Model",
-        available_models
-    )
-
-    st.caption(f"Current Provider: {st.session_state.provider}")
-    st.caption(f"Current Model: {st.session_state.selected_model}")
+        st.caption(f"Current Provider: {st.session_state.provider}")
+        st.caption(f"Current Model: {st.session_state.selected_model}")
 
 if answer is not None:
     st.write(answer)
@@ -219,7 +415,23 @@ with left:
 with middle:
     if st.session_state.get("uploaded_docs"):
         chips = "".join(
-            f"<span style='background:#1f2937;color:#e5e7eb;padding:6px 12px;border-radius:16px;margin-right:8px;font-size:13px;'>📄 {name}</span>"
+            f"""
+            <span style="
+                display:inline-flex;
+                align-items:center;
+                gap:6px;
+                background:#111827;
+                color:#f9fafb;
+                padding:8px 14px;
+                border-radius:18px;
+                border:1px solid #374151;
+                margin-right:8px;
+                margin-bottom:8px;
+                font-size:13px;
+            ">
+                📎 {name}
+            </span>
+            """
             for name in st.session_state.uploaded_docs
         )
         st.markdown(chips, unsafe_allow_html=True)
@@ -239,48 +451,46 @@ if st.session_state.voice_input:
 
 if st.session_state.show_uploader:
 
-    uploaded_files = st.file_uploader(
-        "Attach files",
-        type=[
-            "pdf",
-            "docx",
-            "txt",
-            "csv",
-            "xlsx",
-            "xls",
-            "json",
-            "xml",
-            "png",
-            "jpg",
-            "jpeg"
-        ],
-        accept_multiple_files=True,
-    )
+    with st.container(border=True):
+        st.caption("Attach files")
 
-    if "uploaded_docs" not in st.session_state:
-        st.session_state.uploaded_docs = []
+        uploaded_files = st.file_uploader(
+            "",
+            type=[
+                "pdf", "docx", "txt",
+                "csv", "xlsx", "xls",
+                "json", "xml",
+                "png", "jpg", "jpeg", "webp"
+            ],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key="attachment_uploader"
+        )
 
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            try:
-                text = extract_text(uploaded_file)
+        if uploaded_files:
+            if "uploaded_docs" not in st.session_state:
+                st.session_state.uploaded_docs = []
 
-                if text.strip():
-                    add_document(
-                        text,
-                        uploaded_file.name
-                    )
+            if "document_texts" not in st.session_state:
+                st.session_state.document_texts = {}
 
-                    # Keep track of uploaded files internally
+            for uploaded_file in uploaded_files:
+                try:
+                    text = extract_text(uploaded_file)
+
+                    if text.strip():
+                        add_document(text, uploaded_file.name)
+                        st.session_state.document_texts[uploaded_file.name] = text
+
                     if uploaded_file.name not in st.session_state.uploaded_docs:
                         st.session_state.uploaded_docs.append(uploaded_file.name)
 
-                # If no text is found, do nothing (silent fail)
+                except Exception:
+                    pass
 
-            except Exception:
-                # Silently ignore processing errors for a cleaner UI
-                pass
-        st.session_state.show_uploader = False
+        if st.button("Done", use_container_width=True):
+            st.session_state.show_uploader = False
+            st.rerun()
 
 if prompt:
     memory_text = extract_memory_text(prompt)
@@ -312,11 +522,14 @@ if prompt:
 
         document_results = search_documents(prompt)
 
-        # Use only the top 2 most relevant chunks
         document_context = "\n\n".join(
-            (result.get("text") if isinstance(result, dict) else result)
-            for result in document_results[:2]
+        (
+        f"Source: {result.get('source', 'Unknown document')}\n{result.get('text', '')}"
+        if isinstance(result, dict)
+        else result
         )
+        for result in document_results
+    )
 
         web_context = ""
         if st.session_state.web_search_enabled:
@@ -394,6 +607,18 @@ if prompt:
             "assistant",
             response
         )
+
+        if st.session_state.conversation_title in ["New Chat", prompt[:40]]:
+            try:
+                new_title = generate_chat_title(prompt, response)
+                if new_title:
+                    update_conversation_title(
+                        st.session_state.conversation_id,
+                        new_title
+                    )
+                    st.session_state.conversation_title = new_title
+            except Exception:
+                pass
 
         # speak_text(response)
         st.session_state.voice_input = None
