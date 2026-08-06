@@ -61,9 +61,6 @@ if "provider" not in st.session_state:
     st.session_state.provider = "Ollama"
 
 if "selected_model" not in st.session_state:
-    st.session_state.selected_model = "llama3.2:3b"    
-
-if "selected_model" not in st.session_state:
     st.session_state.selected_model = "llama3.2:3b"
 
 
@@ -314,8 +311,11 @@ if prompt:
         )
 
         document_results = search_documents(prompt)
+
+        # Use only the top 2 most relevant chunks
         document_context = "\n\n".join(
-            (result.get("text") if isinstance(result, dict) else result) for result in document_results
+            (result.get("text") if isinstance(result, dict) else result)
+            for result in document_results[:2]
         )
 
         web_context = ""
@@ -395,5 +395,5 @@ if prompt:
             response
         )
 
-        speak_text(response)
+        # speak_text(response)
         st.session_state.voice_input = None
