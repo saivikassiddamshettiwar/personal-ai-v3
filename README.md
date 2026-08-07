@@ -24,7 +24,7 @@ Personal AI is designed to provide a **ChatGPT-like experience entirely on your 
 
 ### Attachment Workflow
 
-Add a screenshot showing uploaded file chips here.
+<img width="1920" height="975" alt="image" src="https://github.com/user-attachments/assets/60797b1f-abc2-44c1-9319-16ca01a6f371" />
 
 `assets/attachments.png`
 
