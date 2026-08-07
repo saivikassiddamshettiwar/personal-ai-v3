@@ -109,20 +109,31 @@ def add_document(
         )
 
 
-def search_documents(query, number_of_results=3):
+def search_documents(query, number_of_results=3, allowed_sources=None):
 
     if collection.count() == 0:
         return []
+
+    if allowed_sources is not None:
+        allowed_sources = [s for s in allowed_sources if s]
+
+        if not allowed_sources:
+            return []
 
     query_embedding = create_embedding(query)
 
     total_documents = collection.count()
     number_of_results = min(number_of_results, total_documents)
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=number_of_results
-    )
+    query_kwargs = {
+        "query_embeddings": [query_embedding],
+        "n_results": number_of_results,
+    }
+
+    if allowed_sources:
+        query_kwargs["where"] = {"file_name": {"$in": allowed_sources}}
+
+    results = collection.query(**query_kwargs)
 
     documents = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]

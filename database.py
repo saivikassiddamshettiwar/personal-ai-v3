@@ -152,21 +152,34 @@ def save_message(
     connection.close()
 
 
-def get_conversations():
+def get_conversations(search_text=None):
 
     connection = get_connection()
 
     cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        SELECT id, title, created_at
+    if search_text:
+        cursor.execute(
+            """
+            SELECT id, title, created_at
 
-        FROM conversations
+            FROM conversations
+            WHERE LOWER(title) LIKE ?
+            ORDER BY id DESC
+            """,
+            (
+                f"%{search_text.lower()}%",
+            ),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, title, created_at
 
-        ORDER BY id DESC
-        """
-    )
+            FROM conversations
+            ORDER BY id DESC
+            """
+        )
 
     conversations = cursor.fetchall()
 

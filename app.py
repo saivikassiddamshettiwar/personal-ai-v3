@@ -15,6 +15,14 @@ from database import (
     delete_all_conversations,
     update_conversation_title,
 )
+
+def fetch_conversations(search_text=None):
+    try:
+        if search_text:
+            return get_conversations(search_text)
+        return get_conversations()
+    except TypeError:
+        return get_conversations()
 from memory import (
     init_memory_database,
     save_memory,
@@ -167,6 +175,15 @@ if "provider" not in st.session_state:
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = "llama3.2:3b"
 
+if "conversation_search_query" not in st.session_state:
+    st.session_state.conversation_search_query = ""
+
+if "uploaded_docs" not in st.session_state:
+    st.session_state.uploaded_docs = []
+
+if "uploaded_images" not in st.session_state:
+    st.session_state.uploaded_images = []
+
 
 def load_conversation(conversation_id, title="Current Chat"):
     if conversation_id is None:
@@ -207,12 +224,29 @@ def extract_memory_text(prompt):
 
 
 def generate_chat_title(user_prompt, assistant_reply):
-    title_prompt = (
-        "Generate a short conversation title (3-5 words) based on this chat. "
-        "Return ONLY the title and nothing else.\n\n"
-        f"User: {user_prompt}\n"
-        f"Assistant: {assistant_reply}"
-    )
+    title_prompt = f"""
+Generate a very short conversation title (2-5 words).
+
+Rules:
+- Return ONLY the title.
+- Do not use punctuation.
+- Do not repeat the full question.
+- Focus on the main topic.
+
+Examples:
+What is in this PDF could you give me in bullet points?
+-> PDF Summary
+
+Explain machine learning and generative AI
+-> Machine Learning vs Generative AI
+
+Analyze my resume and improve it
+-> Resume Improvement
+
+User: {user_prompt}
+
+Assistant: {assistant_reply}
+"""
 
     title = ""
 
@@ -223,7 +257,7 @@ def generate_chat_title(user_prompt, assistant_reply):
     ):
         title += chunk
 
-    return title.strip().replace("\n", " ")[:40]
+    return title.strip().replace("\n", " ")[:30]
 
 
 def format_conversation_group(created_at):
@@ -300,14 +334,30 @@ with st.sidebar:
 
     st.markdown("### Chats")
 
+    st.text_input(
+        "Search conversations",
+        value=st.session_state.conversation_search_query,
+        placeholder="Search conversation titles...",
+        key="conversation_search_query",
+    )
+
+    conversations = fetch_conversations(st.session_state.conversation_search_query.strip())
+
+    if st.session_state.conversation_search_query:
+        st.markdown(f"Showing {len(conversations)} conversation(s)")
+
     if st.button("+ New chat", use_container_width=True):
         load_conversation(None, "New Chat")
         st.session_state.uploaded_docs = []
+        st.session_state.uploaded_images = []
         st.session_state.document_texts = {}
         st.session_state.show_uploader = False
         st.rerun()
 
     st.markdown("---")
+
+    if not conversations:
+        st.info("No conversations found. Try a different search term or create a new chat.")
 
     for conversation_id, title, created_at in conversations:
 
@@ -333,6 +383,7 @@ with st.sidebar:
                 if st.session_state.conversation_id == conversation_id:
                     load_conversation(None, "New Chat")
                     st.session_state.uploaded_docs = []
+                    st.session_state.uploaded_images = []
                     st.session_state.document_texts = {}
 
                 st.rerun()
@@ -344,6 +395,7 @@ with st.sidebar:
 
         load_conversation(None, "New Chat")
         st.session_state.uploaded_docs = []
+        st.session_state.uploaded_images = []
         st.session_state.document_texts = {}
         st.session_state.show_uploader = False
 
@@ -471,19 +523,37 @@ if st.session_state.show_uploader:
             if "uploaded_docs" not in st.session_state:
                 st.session_state.uploaded_docs = []
 
+            if "uploaded_images" not in st.session_state:
+                st.session_state.uploaded_images = []
+
             if "document_texts" not in st.session_state:
                 st.session_state.document_texts = {}
 
             for uploaded_file in uploaded_files:
                 try:
-                    text = extract_text(uploaded_file)
+                    ext = uploaded_file.name.split(".")[-1].lower()
 
-                    if text.strip():
-                        add_document(text, uploaded_file.name)
-                        st.session_state.document_texts[uploaded_file.name] = text
+                    # Handle image uploads separately
+                    if ext in ["png", "jpg", "jpeg", "webp"]:
+                        temp_path = f"temp_{uploaded_file.name}"
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
 
-                    if uploaded_file.name not in st.session_state.uploaded_docs:
-                        st.session_state.uploaded_docs.append(uploaded_file.name)
+                        if temp_path not in st.session_state.uploaded_images:
+                            st.session_state.uploaded_images.append(temp_path)
+
+                        if uploaded_file.name not in st.session_state.uploaded_docs:
+                            st.session_state.uploaded_docs.append(uploaded_file.name)
+
+                    else:
+                        text = extract_text(uploaded_file)
+
+                        if text.strip():
+                            add_document(text, uploaded_file.name)
+                            st.session_state.document_texts[uploaded_file.name] = text
+
+                        if uploaded_file.name not in st.session_state.uploaded_docs:
+                            st.session_state.uploaded_docs.append(uploaded_file.name)
 
                 except Exception:
                     pass
@@ -520,16 +590,37 @@ if prompt:
             f"- {m[1]}" for m in get_memories()
         )
 
-        document_results = search_documents(prompt)
+        document_results = search_documents(
+            prompt,
+            allowed_sources=st.session_state.uploaded_docs,
+        )
 
         document_context = "\n\n".join(
-        (
-        f"Source: {result.get('source', 'Unknown document')}\n{result.get('text', '')}"
-        if isinstance(result, dict)
-        else result
+            (
+                f"Source: {result.get('source', 'Unknown document')}\n{result.get('text', '')}"
+                if isinstance(result, dict)
+                else result
+            )
+            for result in document_results
         )
-        for result in document_results
-    )
+
+        # Analyze uploaded images automatically
+        image_context = ""
+
+        if st.session_state.get("uploaded_images"):
+            image_descriptions = []
+
+            for image_path in st.session_state.uploaded_images:
+                try:
+                    description = analyze_image(
+                        image_path,
+                        "Describe this image in detail, including any visible text, objects, charts, UI elements, and important information."
+                    )
+                    image_descriptions.append(description)
+                except Exception:
+                    pass
+
+            image_context = "\n\n".join(image_descriptions)
 
         web_context = ""
         if st.session_state.web_search_enabled:
@@ -566,6 +657,12 @@ if prompt:
                     ),
                 }
             )
+
+        if image_context:
+            messages_for_ai.append({
+                "role": "system",
+                "content": "Uploaded image descriptions:\n" + image_context,
+            })
 
         if memory_context:
             messages_for_ai.append({"role": "system", "content": "User memories:\n" + memory_context})

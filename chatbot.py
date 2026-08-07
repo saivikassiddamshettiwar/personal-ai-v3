@@ -1,6 +1,7 @@
 import os
 import tempfile
 import ollama
+import pytesseract
 from PIL import Image
 
 from openai import OpenAI
@@ -178,6 +179,25 @@ def generate_response(messages, model, provider="Ollama"):
 # Image Analysis
 # ==========================================
 
+def extract_text_from_image(image_path):
+    """
+    Extract text from an image using Tesseract OCR.
+    """
+
+    try:
+        image = Image.open(image_path)
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        text = pytesseract.image_to_string(image)
+
+        return text.strip()
+
+    except Exception:
+        return ""
+
+
 def analyze_image(image_path, question, model="llava:latest"):
 
     image = Image.open(image_path)
@@ -185,8 +205,10 @@ def analyze_image(image_path, question, model="llava:latest"):
     if image.mode != "RGB":
         image = image.convert("RGB")
 
-    # Smaller image = faster inference
     image.thumbnail((384, 384))
+
+    # OCR text extraction
+    ocr_text = extract_text_from_image(image_path)
 
     temp_path = None
 
@@ -196,12 +218,25 @@ def analyze_image(image_path, question, model="llava:latest"):
 
         image.save(temp_path, "JPEG", quality=75)
 
+        enhanced_prompt = f"""
+The user asked:
+
+{question}
+
+OCR extracted this text from the image:
+
+{ocr_text}
+
+Use BOTH the OCR text and the visual appearance of the image to answer accurately.
+If there is a conflict, prefer the OCR text for names, dates, certificate numbers, and course titles.
+"""
+
         response = ollama.chat(
             model=model,
             messages=[
                 {
                     "role": "user",
-                    "content": question,
+                    "content": enhanced_prompt,
                     "images": [temp_path],
                 }
             ],
